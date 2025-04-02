@@ -103,7 +103,7 @@ jobs:
               -o UserKnownHostsFile=/dev/null \
               -o ConnectTimeout=30 \
               -o BatchMode=yes \
-              ubuntu@$IP echo "SSH connection successful" || exit 1
+              ec2-user@$IP echo "SSH connection successful" || exit 1
 
       - name: SSH into EC2 and Deploy Ansible Playbook
         run: |
