@@ -61,7 +61,6 @@ jobs:
           
           echo "Extracted IP: $EC2_IP"
           echo "EC2_IP=$EC2_IP" >> $GITHUB_ENV
-          # Save to workspace root directory
           echo "$EC2_IP" > $GITHUB_WORKSPACE/ec2_ip.txt
         working-directory: terraform
 
@@ -74,27 +73,56 @@ jobs:
           cat $GITHUB_WORKSPACE/ec2_ip.txt || echo "No ec2_ip.txt found"
         
       - name: Wait for EC2 Instance to be Ready
-        run: sleep 30
+        run: sleep 45  # Increased wait time for instance initialization
 
       - name: Setup SSH Private Key
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          # Properly format the private key with newlines
+          cat <<EOF > ~/.ssh/id_rsa
+          ${{ secrets.SSH_PRIVATE_KEY }}
+          EOF
           chmod 600 ~/.ssh/id_rsa
+          
+          # Verify key format
+          if ! ssh-keygen -y -f ~/.ssh/id_rsa > ~/.ssh/id_rsa.pub; then
+            echo "ERROR: Invalid SSH private key format"
+            exit 1
+          fi
+          
           IP=$(cat $GITHUB_WORKSPACE/ec2_ip.txt)
           echo "Adding SSH key for IP: $IP"
           ssh-keyscan -H "$IP" >> ~/.ssh/known_hosts
+
+      - name: Test SSH Connection
+        run: |
+          IP=$(cat $GITHUB_WORKSPACE/ec2_ip.txt)
+          echo "Testing SSH connection to $IP"
+          ssh -i ~/.ssh/id_rsa \
+              -o StrictHostKeyChecking=no \
+              -o UserKnownHostsFile=/dev/null \
+              -o ConnectTimeout=30 \
+              -o BatchMode=yes \
+              ubuntu@$IP echo "SSH connection successful" || exit 1
 
       - name: SSH into EC2 and Deploy Ansible Playbook
         run: |
           IP=$(cat $GITHUB_WORKSPACE/ec2_ip.txt)
           echo "Using IP Address: $IP"
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ubuntu@"$IP" << 'EOF'
-            sudo apt update -y
-            sudo apt install -y ansible docker.io
+          ssh -i ~/.ssh/id_rsa \
+              -o StrictHostKeyChecking=no \
+              -o UserKnownHostsFile=/dev/null \
+              -o ConnectTimeout=30 \
+              ubuntu@$IP << 'EOF'
+            # Update and install dependencies
+            sudo apt-get update -y
+            sudo apt-get install -y ansible docker.io
+            
+            # Configure Docker
             sudo systemctl enable --now docker
             sudo usermod -aG docker ubuntu
-
+            
+            # Create Ansible playbook
             cat <<EOT > playbook.yml
             ---
             - name: Setup Docker and Deploy Nginx
@@ -114,6 +142,10 @@ jobs:
                     ports:
                       - "80:80"
             EOT
-
+            
+            # Execute playbook
             ansible-playbook playbook.yml
+            
+            # Verify container is running
+            sudo docker ps
           EOF
