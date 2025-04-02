@@ -55,7 +55,7 @@ jobs:
         working-directory: terraform
         
       - name: Wait for EC2 Instance to be Ready
-        run: sleep 30  # Wait for 60 seconds to allow instance to initialize
+        run: sleep 30  # Wait for 30 seconds to allow instance to initialize
 
       - name: Setup SSH Private Key
         run: |
