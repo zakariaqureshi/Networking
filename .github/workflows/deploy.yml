@@ -59,7 +59,7 @@ jobs:
       - name: Get EC2 Public IP
         run: |
           echo "EC2_IP=$(terraform output -raw public_ip | tr -d '\n')" >> $GITHUB_ENV
-          working-directory: terraform
+        working-directory: terraform
 
 
       - name: Check EC2 Connectivity
