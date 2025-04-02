@@ -108,7 +108,7 @@ resource "aws_security_group" "ec2_sg" {
 }
 
 resource "aws_instance" "web" {
-  ami             = "ami-0c55b159cbfafe1f0"
+  ami             = "ami-08b5b3a93ed654d19"
   instance_type   = var.instance_type
   key_name        = var.key_name
   subnet_id       = aws_subnet.public_subnet_1.id
