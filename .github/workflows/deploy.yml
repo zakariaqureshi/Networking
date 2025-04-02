@@ -46,17 +46,26 @@ jobs:
       - name: Get Terraform Output
         id: terraform-output
         run: |
-          EC2_IP=$(terraform output -raw public_ip)
-          if [ -z "$EC2_IP" ]; then
-            echo "Error: Could not retrieve EC2 public IP."
-            exit 1
-          fi
-          # Clean the IP address by removing any extra characters
-          CLEAN_IP=$(echo "$EC2_IP" | tr -d '\n' | sed 's/[^0-9.]//g')
-          echo "EC2_IP=$CLEAN_IP" >> $GITHUB_ENV
-          echo "$CLEAN_IP" > ec2_ip.txt
-          echo "IP address: $CLEAN_IP"
+              EC2_IP=$(terraform output -raw public_ip || echo "TERRAFORM_OUTPUT_FAILED")
+              echo "Raw output: $EC2_IP"
+              CLEAN_IP=$(echo "$EC2_IP" | tr -d '\n' | sed 's/[^0-9.]//g')
+              echo "Cleaned IP: $CLEAN_IP"
+              if [[ $CLEAN_IP =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                echo "EC2_IP=$CLEAN_IP" >> $GITHUB_ENV
+                echo "$CLEAN_IP" > ec2_ip.txt
+              else
+                echo "ERROR: Invalid IP address format: $CLEAN_IP"
+                exit 1
+              fi
         working-directory: terraform
+
+      - name: Debug Files
+        run: |
+              echo "Current directory: $(pwd)"
+              echo "Files in workspace:"
+              ls -la
+              echo "IP file contents:"
+              cat ec2_ip.txt || echo "No ec2_ip.txt found"
         
       - name: Wait for EC2 Instance to be Ready
         run: sleep 30  # Wait for 30 seconds to allow instance to initialize
