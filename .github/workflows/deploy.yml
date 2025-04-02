@@ -46,29 +46,34 @@ jobs:
       - name: Get Terraform Output
         id: terraform-output
         run: |
-              EC2_IP=$(terraform output -raw public_ip || echo "TERRAFORM_OUTPUT_FAILED")
-              echo "Raw output: $EC2_IP"
-              CLEAN_IP=$(echo "$EC2_IP" | tr -d '\n' | sed 's/[^0-9.]//g')
-              echo "Cleaned IP: $CLEAN_IP"
-              if [[ $CLEAN_IP =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-                echo "EC2_IP=$CLEAN_IP" >> $GITHUB_ENV
-                echo "$CLEAN_IP" > ec2_ip.txt
-              else
-                echo "ERROR: Invalid IP address format: $CLEAN_IP"
-                exit 1
-              fi
+          # Get raw output and extract just the IP address
+          RAW_OUTPUT=$(terraform output -raw public_ip)
+          echo "Raw output: $RAW_OUTPUT"
+          
+          # Extract just the IP address using grep
+          EC2_IP=$(echo "$RAW_OUTPUT" | grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | head -1)
+          
+          if [ -z "$EC2_IP" ]; then
+            echo "ERROR: Could not extract valid IP address from Terraform output"
+            echo "Full output was: $RAW_OUTPUT"
+            exit 1
+          fi
+          
+          echo "Extracted IP: $EC2_IP"
+          echo "EC2_IP=$EC2_IP" >> $GITHUB_ENV
+          echo "$EC2_IP" > ec2_ip.txt
         working-directory: terraform
 
       - name: Debug Files
         run: |
-              echo "Current directory: $(pwd)"
-              echo "Files in workspace:"
-              ls -la
-              echo "IP file contents:"
-              cat ec2_ip.txt || echo "No ec2_ip.txt found"
+          echo "Current directory: $(pwd)"
+          echo "Files in workspace:"
+          ls -la
+          echo "IP file contents:"
+          cat ec2_ip.txt || echo "No ec2_ip.txt found"
         
       - name: Wait for EC2 Instance to be Ready
-        run: sleep 30  # Wait for 30 seconds to allow instance to initialize
+        run: sleep 30
 
       - name: Setup SSH Private Key
         run: |
