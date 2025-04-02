@@ -1,9 +1,9 @@
-name: Deploy to AWS  # Add a workflow name
+name: Deploy to AWS
 
 on:
   push:
     branches:
-      - main  # This will run the workflow on push to the main branch
+      - main
 
 jobs:
   deploy:
@@ -25,9 +25,59 @@ jobs:
         run: echo "AWS Credentials Configured"
 
       - name: Terraform Init
-        run: terraform init
+        run: terraform init -input=false
+        working-directory: terraform
+
+      - name: Terraform Validate
+        run: terraform validate
+        working-directory: terraform
+
+      - name: Terraform Plan
+        run: terraform plan -out=tfplan
         working-directory: terraform
 
       - name: Terraform Apply
         run: terraform apply -auto-approve
         working-directory: terraform
+
+      - name: Get Terraform Output
+        run: echo "EC2_IP=$(terraform output -raw public_ip)" >> $GITHUB_ENV
+        working-directory: terraform
+
+      - name: Setup SSH Private Key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H $EC2_IP >> ~/.ssh/known_hosts
+
+      - name: SSH into EC2 and Deploy Ansible Playbook
+        run: |
+          ssh -i ~/.ssh/id_rsa ubuntu@$EC2_IP << 'EOF'
+            sudo apt update -y
+            sudo apt install -y ansible docker.io
+            sudo systemctl enable --now docker
+            sudo usermod -aG docker ubuntu
+
+            cat <<EOT > playbook.yml
+            ---
+            - name: Setup Docker and Deploy Nginx
+              hosts: localhost
+              become: true
+              tasks:
+                - name: Pull Nginx Docker image
+                  docker_image:
+                    name: nginx
+                    source: pull
+
+                - name: Run Nginx Container
+                  docker_container:
+                    name: nginx_server
+                    image: nginx
+                    state: started
+                    ports:
+                      - "80:80"
+            EOT
+
+            ansible-playbook playbook.yml
+          EOF
