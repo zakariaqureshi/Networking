@@ -44,7 +44,13 @@ jobs:
         working-directory: terraform
 
       - name: Get Terraform Output
-        run: echo "EC2_IP=$(terraform output -raw public_ip)" >> $GITHUB_ENV
+        run: |
+            EC2_IP=$(terraform output -raw public_ip 2>/dev/null | tr -d '\n' || echo "")
+            if [ -z "$EC2_IP" ]; then
+              echo "Error: Could not retrieve EC2 public IP."
+              exit 1
+            fi
+            echo "EC2_IP=$EC2_IP" >> $GITHUB_ENV
         working-directory: terraform
 
       - name: Setup SSH Private Key
