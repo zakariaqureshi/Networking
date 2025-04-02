@@ -25,7 +25,6 @@ jobs:
           echo "[profile default]" > ~/.aws/config
           echo "region=${{ secrets.AWS_REGION }}" >> ~/.aws/config
         shell: bash
-"
 
       - name: Terraform Init
         run: terraform init -input=false
