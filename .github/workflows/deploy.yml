@@ -61,7 +61,8 @@ jobs:
           
           echo "Extracted IP: $EC2_IP"
           echo "EC2_IP=$EC2_IP" >> $GITHUB_ENV
-          echo "$EC2_IP" > ec2_ip.txt
+          # Save to workspace root directory
+          echo "$EC2_IP" > $GITHUB_WORKSPACE/ec2_ip.txt
         working-directory: terraform
 
       - name: Debug Files
@@ -70,7 +71,7 @@ jobs:
           echo "Files in workspace:"
           ls -la
           echo "IP file contents:"
-          cat ec2_ip.txt || echo "No ec2_ip.txt found"
+          cat $GITHUB_WORKSPACE/ec2_ip.txt || echo "No ec2_ip.txt found"
         
       - name: Wait for EC2 Instance to be Ready
         run: sleep 30
@@ -80,13 +81,13 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          IP=$(cat ec2_ip.txt)
+          IP=$(cat $GITHUB_WORKSPACE/ec2_ip.txt)
           echo "Adding SSH key for IP: $IP"
           ssh-keyscan -H "$IP" >> ~/.ssh/known_hosts
 
       - name: SSH into EC2 and Deploy Ansible Playbook
         run: |
-          IP=$(cat ec2_ip.txt)
+          IP=$(cat $GITHUB_WORKSPACE/ec2_ip.txt)
           echo "Using IP Address: $IP"
           ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ubuntu@"$IP" << 'EOF'
             sudo apt update -y
