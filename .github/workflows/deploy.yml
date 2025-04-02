@@ -47,15 +47,10 @@ jobs:
         id: terraform-output
         run: |
           # Get raw output and extract just the IP address
-          RAW_OUTPUT=$(terraform output -raw public_ip)
-          echo "Raw output: $RAW_OUTPUT"
-          
-          # Extract just the IP address using grep
-          EC2_IP=$(echo "$RAW_OUTPUT" | grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | head -1)
+          EC2_IP=$(terraform output -raw public_ip 2>&1 | grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | head -1)
           
           if [ -z "$EC2_IP" ]; then
             echo "ERROR: Could not extract valid IP address from Terraform output"
-            echo "Full output was: $RAW_OUTPUT"
             exit 1
           fi
           
@@ -63,7 +58,7 @@ jobs:
           echo "EC2_IP=$EC2_IP" >> $GITHUB_ENV
           echo "$EC2_IP" > $GITHUB_WORKSPACE/ec2_ip.txt
         working-directory: terraform
-
+  
       - name: Debug Files
         run: |
           echo "Current directory: $(pwd)"
