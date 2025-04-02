@@ -44,14 +44,16 @@ jobs:
         working-directory: terraform
 
       - name: Get Terraform Output
+        id: terraform-output
         run: |
-            EC2_IP=$(terraform output -raw public_ip | tr -d '\n')
-            if [ -z "$EC2_IP" ]; then
-              echo "Error: Could not retrieve EC2 public IP."
-              exit 1
-            fi
-            echo "EC2_IP=$EC2_IP" >> $GITHUB_ENV
-            echo $EC2_IP > ec2_ip.txt  # Save IP to a text file
+          EC2_IP=$(terraform output -raw public_ip | tr -d '\n')
+          if [ -z "$EC2_IP" ]; then
+            echo "Error: Could not retrieve EC2 public IP."
+            exit 1
+          fi
+          echo "EC2_IP=$EC2_IP" >> $GITHUB_ENV
+          echo $EC2_IP > ec2_ip.txt  # Save IP to a text file
+          echo "::set-output name=ip_address::$EC2_IP"
         working-directory: terraform
         
       - name: Wait for EC2 Instance to be Ready
@@ -62,13 +64,12 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H $(cat ec2_ip.txt) >> ~/.ssh/known_hosts  # Use IP from file for SSH
+          ssh-keyscan -H ${{ env.EC2_IP }} >> ~/.ssh/known_hosts
 
       - name: SSH into EC2 and Deploy Ansible Playbook
         run: |
-          EC2_IP=$(cat ec2_ip.txt)  # Read the IP from the saved text file
-          echo "Using IP Address: $EC2_IP"
-          ssh -i ~/.ssh/id_rsa ubuntu@$EC2_IP << 'EOF'
+          echo "Using IP Address: ${{ env.EC2_IP }}"
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ubuntu@${{ env.EC2_IP }} << 'EOF'
             sudo apt update -y
             sudo apt install -y ansible docker.io
             sudo systemctl enable --now docker
