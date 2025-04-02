@@ -1,4 +1,4 @@
-# provider.tf
 provider "aws" {
-  region = "us-east-1"
+  region = var.aws_region
+  shared_credentials_files = ["/home/runner/.aws/credentials"]
 }
