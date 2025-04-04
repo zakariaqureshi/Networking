@@ -100,47 +100,61 @@ jobs:
               -o BatchMode=yes \
               ec2-user@$IP echo "SSH connection successful" || exit 1
 
-      - name: SSH into EC2 and Deploy Ansible Playbook
+      - name: SSH into EC2 and Deploy Docker with Nginx (Ansible)
         run: |
           IP=$(cat $GITHUB_WORKSPACE/ec2_ip.txt)
           echo "Using IP Address: $IP"
+          
           ssh -i ~/.ssh/id_rsa \
               -o StrictHostKeyChecking=no \
               -o UserKnownHostsFile=/dev/null \
               -o ConnectTimeout=30 \
               ec2-user@$IP << 'EOF'
-            # Update and install dependencies
-            sudo apt-get update -y
-            sudo apt-get install -y ansible docker.io
-            
-            # Configure Docker
-            sudo systemctl enable --now docker
-            sudo usermod -aG docker ubuntu
-            
-            # Create Ansible playbook
-            cat <<EOT > playbook.yml
-            ---
-            - name: Setup Docker and Deploy Nginx
-              hosts: localhost
-              become: true
-              tasks:
-                - name: Pull Nginx Docker image
-                  docker_image:
-                    name: nginx
-                    source: pull
+          # Update system and install prerequisites
+          sudo dnf update -y
+          sudo dnf install -y docker git python3-pip
 
-                - name: Run Nginx Container
-                  docker_container:
-                    name: nginx_server
-                    image: nginx
-                    state: started
-                    ports:
-                      - "80:80"
-            EOT
-            
-            # Execute playbook
-            ansible-playbook playbook.yml
-            
-            # Verify container is running
-            sudo docker ps
+          # Start and enable Docker
+          sudo systemctl enable --now docker
+          sudo usermod -aG docker ec2-user
+
+          # Install Ansible and Docker SDK
+          sudo pip3 install ansible docker
+
+          # Clone your repo (if playbook is in a repository)
+          # git clone https://github.com/your/repo.git
+          # cd repo
+
+          # Create Ansible playbook file
+          cat <<EOT > playbook.yml
+          ---
+          - name: Deploy Nginx Container
+            hosts: localhost
+            become: true
+            tasks:
+              - name: Ensure Docker SDK is installed
+                pip:
+                  name: docker
+
+              - name: Pull Nginx image
+                community.docker.docker_image:
+                  name: nginx
+                  source: pull
+
+              - name: Run Nginx container
+                community.docker.docker_container:
+                  name: nginx_server
+                  image: nginx
+                  state: started
+                  restart_policy: always
+                  ports:
+                    - "80:80"
+          EOT
+
+          # Execute playbook with verbose output
+          ansible-playbook playbook.yml -v
+
+          # Verification
+          sudo docker ps
+          curl -I http://localhost:80
           EOF
