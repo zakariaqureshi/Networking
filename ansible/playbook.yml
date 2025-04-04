@@ -1,23 +1,35 @@
-# Create Ansible Playbook
-cat <<EOF > /home/ubuntu/playbook.yml
+# Create fixed Ansible playbook
+cat <<EOT > playbook.yml
 ---
-- name: Setup Docker and Deploy Nginx
+- name: Deploy Nginx Container
   hosts: localhost
   become: true
   tasks:
-    - name: Pull Nginx Docker image
-      docker_image:
+    - name: Ensure Docker is running
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Pull Nginx image
+      community.docker.docker_image:
         name: nginx
         source: pull
+        force_source: yes
 
-    - name: Run Nginx Container
-      docker_container:
+    - name: Run Nginx container
+      community.docker.docker_container:
         name: nginx_server
         image: nginx
         state: started
+        restart_policy: unless-stopped
         ports:
           - "80:80"
-EOF
+        log_driver: json-file
+        log_options:
+          max-size: "10m"
+          max-file: "3"
+EOT
 
-# Run Ansible Playbook
-ansible-playbook /home/ubuntu/playbook.yml
+# Run with debug
+ANSIBLE_DEBUG=1 ansible-playbook playbook.yml
