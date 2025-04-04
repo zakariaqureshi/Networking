@@ -100,7 +100,7 @@ jobs:
               -o BatchMode=yes \
               ec2-user@$IP echo "SSH connection successful" || exit 1
 
-      - name: SSH into EC2 and Deploy Docker with Nginx (Ansible)
+      - name: SSH into EC2 and Deploy Docker with Nginx
         run: |
           IP=$(cat $GITHUB_WORKSPACE/ec2_ip.txt)
           echo "Using IP Address: $IP"
@@ -110,22 +110,26 @@ jobs:
               -o UserKnownHostsFile=/dev/null \
               -o ConnectTimeout=30 \
               ec2-user@$IP << 'EOF'
-          # Update system and install prerequisites
+          # Update system and install Docker
           sudo dnf update -y
-          sudo dnf install -y docker git python3-pip
-
+          sudo dnf install -y docker git
+          
+          # Configure firewall
+          sudo dnf install -y firewalld
+          sudo systemctl enable --now firewalld
+          sudo firewall-cmd --permanent --add-port=80/tcp
+          sudo firewall-cmd --reload
+          
           # Start and enable Docker
           sudo systemctl enable --now docker
           sudo usermod -aG docker ec2-user
-
-          # Install Ansible and Docker SDK
-          sudo pip3 install ansible docker
-
-          # Clone your repo (if playbook is in a repository)
-          # git clone https://github.com/your/repo.git
-          # cd repo
-
-          # Create Ansible playbook file
+          
+          # Install Python and required packages
+          sudo dnf install -y python3 python3-pip
+          sudo pip3 install --upgrade pip
+          sudo pip3 install docker ansible-core
+          
+          # Create Ansible playbook
           cat <<EOT > playbook.yml
           ---
           - name: Deploy Nginx Container
@@ -134,8 +138,10 @@ jobs:
             tasks:
               - name: Ensure Docker SDK is installed
                 pip:
-                  name: docker
-
+                  name:
+                    - docker
+                    - requests>=2.26.0
+              
               - name: Pull Nginx image
                 community.docker.docker_image:
                   name: nginx
@@ -149,12 +155,26 @@ jobs:
                   restart_policy: always
                   ports:
                     - "80:80"
+                  published_ports:
+                    - "80:80"
           EOT
-
-          # Execute playbook with verbose output
-          ansible-playbook playbook.yml -v
-
-          # Verification
-          sudo docker ps
-          curl -I http://localhost:80
+          
+          # Execute playbook
+          /usr/local/bin/ansible-playbook playbook.yml -v
+          
+          # Wait for container to start
+          sleep 10
+          
+          # Verification and debugging
+          echo "=== Docker Containers ==="
+          sudo docker ps -a
+          
+          echo "=== Nginx Container Logs ==="
+          sudo docker logs nginx_server
+          
+          echo "=== Port Binding Check ==="
+          sudo netstat -tulnp | grep 80 || true
+          
+          echo "=== Curl Test ==="
+          curl -v http://localhost:80 || curl -v http://127.0.0.1:80
           EOF
